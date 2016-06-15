@@ -285,9 +285,10 @@ class AnsibleInventory(object):
         with open(path, 'wb') as fh:
             fh.write(self.to_string())
 
-        yield path
-
-        os.remove(path)
+        try:
+            yield path
+        finally:
+            os.remove(path)
 
 
 def simple_inventory(a, b=None):

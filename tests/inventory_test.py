@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 import ansible_coach.inventory as inventory
 
-class AnsibleTestCase(unittest.TestCase):
+class InventoryTestCase(unittest.TestCase):
 
     def setUp(self):
         pass
