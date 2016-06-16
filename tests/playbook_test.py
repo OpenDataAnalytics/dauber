@@ -54,12 +54,23 @@ class PlaybookTestCase(unittest.TestCase):
         self.assertTupleInList(("-i", "some_inventory"), p.cmd)
 
     @mock.patch("ansible_coach.playbook.tempfile")
-    def test_cmd_AnsibleInventory_inventory(self, tempfile):
+    def test_cmd_Inventory_inventory(self, tempfile):
         # mock out call to tempfile.mkstemp - make sure it returns known path
         tempfile.mkstemp.return_value = (None, "/tmp/temp_inventory")
 
-        p = playbook.Playbook("some_playbook.yml", playbook.AnsibleInventory(['localhost']))
+        p = playbook.Playbook("some_playbook.yml", playbook.Inventory(['localhost']))
         self.assertTrue(("-i", "/tmp/temp_inventory"), p.cmd)
+
+
+    def test_cmd_string_tag(self):
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.tags = "test_tag"
+        self.assertTupleInList(("-t", "test_tag"), p.cmd)
+
+    def test_cmd_list_tags(self):
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.tags = ["test_tag", "test_other_tag"]
+        self.assertTupleInList(("-t", "test_tag,test_other_tag"), p.cmd)
 
 
     def test_cmd_default_verbosity(self):
@@ -176,11 +187,11 @@ class PlaybookTestCase(unittest.TestCase):
 
 
     ############
-    ## Test AnsibleInventory temporary file creation
+    ## Test Inventory temporary file creation
     #####
 
     @mock.patch("ansible_coach.playbook.tempfile")
-    def test_create_AnsibleInventory_tempfile(self, tempfile):
+    def test_create_Inventory_tempfile(self, tempfile):
         # Mock out mkstemp's value so we have a known location for the inventory file
         # TODO: this should be using package_resources to create this file in a local temporary
         #       test directory instead of just in '/tmp/'
@@ -200,7 +211,7 @@ class PlaybookTestCase(unittest.TestCase):
             # we call _call_subprocess
             _run.side_effect = test_temp_exists
 
-            p = playbook.Playbook("some_playbook.yml", playbook.AnsibleInventory(['localhost']))
+            p = playbook.Playbook("some_playbook.yml", playbook.Inventory(['localhost']))
 
             p.run()
 

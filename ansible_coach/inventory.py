@@ -5,7 +5,7 @@ import json
 from contextlib import contextmanager
 
 
-class AnsibleInventoryHost(object):
+class InventoryHost(object):
     '''
     Represents an Ansible inventory host and its associated variables.
     Implements low level functions for reading and writing the host to
@@ -43,13 +43,13 @@ class AnsibleInventoryHost(object):
             except IndexError:
                 raise RuntimeError('Could not parse %s for host %s' %
                                    (part, host))
-        return AnsibleInventoryHost(host, **kwargs)
+        return InventoryHost(host, **kwargs)
 
     def __eq__(self, other):
         return self.host == other.host and self.variables == other.variables
 
 
-class AnsibleInventorySection(object):
+class InventorySection(object):
     '''
     Abstract class that represents a config section in an Ansible inventory
     script.
@@ -79,14 +79,14 @@ class AnsibleInventorySection(object):
         self.items.append(item)
 
 
-class AnsibleInventoryGroup(AnsibleInventorySection):
+class InventoryGroup(InventorySection):
     '''
     Class that represents a group section in an Ansible inventory script
     '''
 
     def __init__(self, heading, items=None):
-        super(AnsibleInventoryGroup, self).__init__(heading, items)
-        self.items = [AnsibleInventory.as_host(item) for item in self.items]
+        super(InventoryGroup, self).__init__(heading, items)
+        self.items = [Inventory.as_host(item) for item in self.items]
 
     @staticmethod
     def treat(line):
@@ -110,16 +110,16 @@ class AnsibleInventoryGroup(AnsibleInventorySection):
 # Note:  does not currently implement group vars,  or groups of groups
 #        See: http://docs.ansible.com/ansible/intro_inventory.html for more
 #        info on these features.
-class AnsibleInventory(object):
+class Inventory(object):
     '''
     Represents an Ansible inventory script. It reads and writes an ini-like
     file in the style of an Ansible inventory.
     '''
 
-    # Could add classes for AnsibleInventoryGroupVars and
-    # AnsibleInventoryGroupOfGroups here if these features become
+    # Could add classes for InventoryGroupVars and
+    # InventoryGroupOfGroups here if these features become
     # importaint
-    section_classes = [AnsibleInventoryGroup]
+    section_classes = [InventoryGroup]
 
     # Empty line or whitespace or starts with #
     ignore_lines = re.compile('^\s+$|^#')
@@ -130,10 +130,10 @@ class AnsibleInventory(object):
             val.to_string()
             return val
         except AttributeError:
-            return AnsibleInventoryHost.from_string(val)
+            return InventoryHost.from_string(val)
 
     def __init__(self, global_hosts,  sections=None):
-        self.global_hosts = [AnsibleInventory.as_host(h)
+        self.global_hosts = [Inventory.as_host(h)
                              for h in global_hosts]
         self.sections = sections if sections is not None else []
 
@@ -144,7 +144,7 @@ class AnsibleInventory(object):
 
         for line in inventory.split('\n'):
             # Ignore comments and empty lines
-            if line == '' or AnsibleInventory.ignore_lines.match(line):
+            if line == '' or Inventory.ignore_lines.match(line):
                 continue
 
             # Sentinal that asks 'are we on a new section heading?'
@@ -153,7 +153,7 @@ class AnsibleInventory(object):
 
             # Ask easy of our section classes if it can treat this
             # particular line
-            for section_class in AnsibleInventory.section_classes:
+            for section_class in Inventory.section_classes:
                 if section_class.treat(line):
                     treated = True
                     break
@@ -172,20 +172,20 @@ class AnsibleInventory(object):
             else:
                 # we've just got content
                 current.append(
-                    AnsibleInventoryHost.from_string(line.rstrip()))
+                    InventoryHost.from_string(line.rstrip()))
 
         # Make sure we append the last section (assuming it is
         # not global_hosts)
         if id(current) != id(global_hosts):
             sections.append(current)
 
-        return AnsibleInventory(global_hosts, sections)
+        return Inventory(global_hosts, sections)
 
     @staticmethod
     def from_file(path):
         with open(path, 'rb') as fh:
             inventory = fh.read()
-        return AnsibleInventory.from_string(inventory)
+        return Inventory.from_string(inventory)
 
     def to_string(self):
         s = ''
@@ -218,16 +218,16 @@ class AnsibleInventory(object):
 
         for key, items in d.items():
             if key != '_meta':
-                g = AnsibleInventoryGroup(key)
+                g = InventoryGroup(key)
                 for host in items:
-                    g.items.append(AnsibleInventoryHost(host))
+                    g.items.append(InventoryHost(host))
                 sections.append(g)
             else:
                 for host, variables in items['hostvars'].items():
                     global_hosts.append(
-                        AnsibleInventoryHost(host, **variables))
+                        InventoryHost(host, **variables))
 
-        return AnsibleInventory(global_hosts, sections)
+        return Inventory(global_hosts, sections)
 
     def to_json(self, with_meta=True):
         d = {'_meta': {'hostvars': {}}} if with_meta else {}
@@ -237,7 +237,7 @@ class AnsibleInventory(object):
 
         for sec in self.sections:
             d[sec.name] = []
-            if isinstance(sec, AnsibleInventoryGroup):
+            if isinstance(sec, InventoryGroup):
                 for host in sec.items:
                     # Note: Ignores variables here
                     #       just appends the host name
@@ -294,11 +294,11 @@ class AnsibleInventory(object):
 def simple_inventory(a, b=None):
     '''Generate an inventory object from a list of arguments
 
-    This is a utility function designed to generate an AnsibleInventory
+    This is a utility function designed to generate an Inventory
     object from simple python built-in types. It is intended to cover
     common use cases.  If simple_inventory does not meet your needs please
-    use the AnsibleInventory object and related classes (e.g.
-    AnsibleInventoryGroup) instead. simple_inventory takes one required
+    use the Inventory object and related classes (e.g.
+    InventoryGroup) instead. simple_inventory takes one required
     argument (a) and one optional argument (b).
 
     If 'a' is a string and 'b' is not included we assume a single global host
@@ -320,32 +320,32 @@ def simple_inventory(a, b=None):
     :type a: string, list, dict
     :param b: list, dict, NoneType
     :returns: an ansible inventory object
-    :rtype: AnsibleInventoryObject
+    :rtype: InventoryObject
 
     '''
     # Simple string,  assume a single global host
     if isinstance(a, basestring) and b is None:
-        return AnsibleInventory([a])
+        return Inventory([a])
 
     # List of items,  assume a list of global hosts
     if isinstance(a, list) and b is None:
-        return AnsibleInventory(a)
+        return Inventory(a)
 
     # Assume a dict of group:list(hosts)
     if isinstance(a, dict):
-        return AnsibleInventory(
-            [], sections=[AnsibleInventoryGroup(group, hosts)
+        return Inventory(
+            [], sections=[InventoryGroup(group, hosts)
                           for group, hosts in a.items()])
 
     # Assume a list of global hosts and group:list(hosts)
     if isinstance(a, list) and isinstance(b, dict):
-        return AnsibleInventory(
-            a, sections=[AnsibleInventoryGroup(group, hosts)
+        return Inventory(
+            a, sections=[InventoryGroup(group, hosts)
                          for group, hosts in b.items()])
 
     if isinstance(a, basestring) and isinstance(b, dict):
-        return AnsibleInventory(
-            [a], sections=[AnsibleInventoryGroup(group, hosts)
+        return Inventory(
+            [a], sections=[InventoryGroup(group, hosts)
                            for group, hosts in b.items()])
 
     raise Exception('simple_inventory could not parse arguments, '

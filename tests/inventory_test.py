@@ -15,19 +15,19 @@ class InventoryTestCase(unittest.TestCase):
 
     def test_ansible_inventory_host_basic(self):
         case = 'localhost'
-        h = inventory.AnsibleInventoryHost(case)
+        h = inventory.InventoryHost(case)
         self.assertEquals(case, h.host)
         self.assertEquals(case, h.to_string())
 
     def test_ansible_inventory_host_basic_read_from_string(self):
         case = 'localhost'
-        h = inventory.AnsibleInventoryHost.from_string(case)
+        h = inventory.InventoryHost.from_string(case)
         self.assertEquals(case, h.host)
         self.assertEquals(case, h.to_string())
 
     def test_ansible_inventory_host_variables_to_string(self):
         target = 'localhost foo=bar baz=bar'
-        h = inventory.AnsibleInventoryHost('localhost', foo='bar', baz='bar')
+        h = inventory.InventoryHost('localhost', foo='bar', baz='bar')
 
         # Ensure variables have been set on host
         self.assertTrue('foo' in h.variables)
@@ -46,17 +46,17 @@ class InventoryTestCase(unittest.TestCase):
                  'localhost foo = bar']
         for case in cases:
             with self.assertRaises(RuntimeError):
-                inventory.AnsibleInventoryHost.from_string(case)
+                inventory.InventoryHost.from_string(case)
 
     def test_ansible_inventory_host_equality(self):
-        source = inventory.AnsibleInventoryHost('localhost',
+        source = inventory.InventoryHost('localhost',
                                                 foo='bar', bar='baz')
-        target = inventory.AnsibleInventoryHost('localhost',
+        target = inventory.InventoryHost('localhost',
                                                 foo='bar', bar='baz')
 
-        malformed1 = inventory.AnsibleInventoryHost('other_host',
+        malformed1 = inventory.InventoryHost('other_host',
                                                     foo='bar', bar='baz')
-        malformed2 = inventory.AnsibleInventoryHost('localhost', foo='bar')
+        malformed2 = inventory.InventoryHost('localhost', foo='bar')
 
         self.assertEquals(source, target)
 
@@ -64,61 +64,61 @@ class InventoryTestCase(unittest.TestCase):
         self.assertNotEquals(source, malformed2)
 
     def test_ansible_inventory_group_name(self):
-        g = inventory.AnsibleInventoryGroup('[foobar]')
+        g = inventory.InventoryGroup('[foobar]')
         self.assertEquals(g.heading, '[foobar]')
         self.assertEquals(g.name, 'foobar')
 
     def test_ansible_inventory_group_set_name(self):
-        g = inventory.AnsibleInventoryGroup('[foobar]')
+        g = inventory.InventoryGroup('[foobar]')
         g.name = 'FOOBAR'
         self.assertEquals(g.name, 'FOOBAR')
         self.assertEquals(g.heading, '[FOOBAR]')
 
     def test_ansible_inventory_headding_mangling(self):
-        g = inventory.AnsibleInventoryGroup('[foobar]')
+        g = inventory.InventoryGroup('[foobar]')
         self.assertEquals(g.heading, '[foobar]')
         self.assertEquals(g.name, 'foobar')
 
-        g = inventory.AnsibleInventoryGroup('foobar]')
+        g = inventory.InventoryGroup('foobar]')
         self.assertEquals(g.heading, '[foobar]')
         self.assertEquals(g.name, 'foobar')
 
-        g = inventory.AnsibleInventoryGroup('foobar')
+        g = inventory.InventoryGroup('foobar')
         self.assertEquals(g.heading, '[foobar]')
         self.assertEquals(g.name, 'foobar')
 
     def test_ansible_inventory_group_items(self):
         base = 'localhost foo=bar bar=baz'
-        h = inventory.AnsibleInventoryHost.from_string(base)
+        h = inventory.InventoryHost.from_string(base)
 
-        g = inventory.AnsibleInventoryGroup('[foobar]', [base])
+        g = inventory.InventoryGroup('[foobar]', [base])
 
         self.assertEquals(len(g.items), 1)
         self.assertEquals(g.items[0], h)
 
-        g2 = inventory.AnsibleInventoryGroup('[foobar]', [h])
+        g2 = inventory.InventoryGroup('[foobar]', [h])
 
         self.assertEquals(len(g2.items), 1)
         self.assertEquals(g.items[0], g2.items[0])
 
     def test_ansible_inventory_group_treat(self):
-        self.assertTrue(inventory.AnsibleInventoryGroup.treat('[foobar]'))
-        self.assertFalse(inventory.AnsibleInventoryGroup.treat(
+        self.assertTrue(inventory.InventoryGroup.treat('[foobar]'))
+        self.assertFalse(inventory.InventoryGroup.treat(
             '[foobar:vars]'))
-        self.assertFalse(inventory.AnsibleInventoryGroup.treat(
+        self.assertFalse(inventory.InventoryGroup.treat(
             '[foobar:children]'))
-        self.assertFalse(inventory.AnsibleInventoryGroup.treat('foobar'))
+        self.assertFalse(inventory.InventoryGroup.treat('foobar'))
 
     def test_ansible_inventory_basic(self):
         script = '''localhost
 '''
 
-        i = inventory.AnsibleInventory.from_string(script)
+        i = inventory.Inventory.from_string(script)
 
         self.assertEquals(len(i.global_hosts), 1)
 
         self.assertTrue(isinstance(i.global_hosts[0],
-                                   inventory.AnsibleInventoryHost))
+                                   inventory.InventoryHost))
 
         self.assertEquals(i.global_hosts[0].to_string(), 'localhost')
 
@@ -127,7 +127,7 @@ class InventoryTestCase(unittest.TestCase):
     def test_ansible_inventory_with_variables(self):
         script = '''localhost foo=bar baz=bar
 '''
-        i = inventory.AnsibleInventory.from_string(script)
+        i = inventory.Inventory.from_string(script)
         self.assertEquals(i.to_string(), script)
 
     def test_ansible_inventory_with_groups(self):
@@ -141,7 +141,7 @@ localhost foo=other
 192.168.1.10
 
 '''
-        i = inventory.AnsibleInventory.from_string(script)
+        i = inventory.Inventory.from_string(script)
         self.assertEquals(len(i.global_hosts), 1)
 
         self.assertEquals(i.global_hosts[0].host, 'localhost')
@@ -178,7 +178,7 @@ localhost foo=other
 192.168.1.10
 
 '''
-        i = inventory.AnsibleInventory.from_string(target)
+        i = inventory.Inventory.from_string(target)
 
         with i.to_tempfile() as path:
             self.assertTrue(os.path.exists(path))
@@ -189,12 +189,12 @@ localhost foo=other
         self.assertFalse(os.path.exists(path))
 
     def test_ansible_inventory_as_host(self):
-        source = inventory.AnsibleInventory.as_host('localhost foo=bar')
-        target = inventory.AnsibleInventoryHost('localhost', foo='bar')
+        source = inventory.Inventory.as_host('localhost foo=bar')
+        target = inventory.InventoryHost('localhost', foo='bar')
 
         self.assertEquals(source, target)
 
-        i = inventory.AnsibleInventory(['localhost foo=bar'])
+        i = inventory.Inventory(['localhost foo=bar'])
 
         self.assertEquals(len(i.global_hosts), 1)
         self.assertEquals(source, i.global_hosts[0])
@@ -210,14 +210,14 @@ localhost foo=other
 192.168.1.10
 
 '''
-        i = inventory.AnsibleInventory(
+        i = inventory.Inventory(
             ['localhost foo=bar baz=bar'],
             sections=[
-                inventory.AnsibleInventoryGroup(
+                inventory.InventoryGroup(
                     'some_group',
                     ['localhost foo=other', '192.168.1.10']
                 ),
-                inventory.AnsibleInventoryGroup(
+                inventory.InventoryGroup(
                     'another group',
                     ['192.168.1.10']
                 )
@@ -241,7 +241,7 @@ localhost foo=other
                  '{"foo": "other", "baz": "bar"}}}, "some_group": ' + \
                  '["localhost", "192.168.1.10"], "another group": ' + \
                  '["192.168.1.10"]}'
-        i = inventory.AnsibleInventory.from_string(source)
+        i = inventory.Inventory.from_string(source)
 
         self.assertEquals(i.to_json(), target)
 
@@ -261,26 +261,26 @@ localhost
                  '{"foo": "other", "baz": "bar"}}}, "some_group": ' + \
                  '["localhost", "192.168.1.10"], "another group": ' + \
                  '["192.168.1.10"]}'
-        i = inventory.AnsibleInventory.from_json(source)
+        i = inventory.Inventory.from_json(source)
 
         self.assertEquals(i.to_string(), target)
 
 
     def test_simple_inventory_string(self):
-        target = inventory.AnsibleInventory(['localhost'])
+        target = inventory.Inventory(['localhost'])
         source = inventory.simple_inventory('localhost')
 
         self.assertEquals(source.to_string(), target.to_string())
 
     def test_simple_inventory_list(self):
-        target = inventory.AnsibleInventory(['localhost', 'localhost2'])
+        target = inventory.Inventory(['localhost', 'localhost2'])
         source = inventory.simple_inventory(['localhost', 'localhost2'])
 
         self.assertEquals(source.to_string(), target.to_string())
 
     def test_simple_inventory_dict(self):
-        target = inventory.AnsibleInventory([], sections=[
-            inventory.AnsibleInventoryGroup('test', ['localhost', 'localhost2'])])
+        target = inventory.Inventory([], sections=[
+            inventory.InventoryGroup('test', ['localhost', 'localhost2'])])
 
         source = inventory.simple_inventory(
             {"test": ["localhost", "localhost2"]})
@@ -288,8 +288,8 @@ localhost
         self.assertEquals(source.to_string(), target.to_string())
 
     def test_simple_inventory_string_and_dict(self):
-        target = inventory.AnsibleInventory(['localhost'], sections=[
-            inventory.AnsibleInventoryGroup('test', ['localhost', 'localhost2'])])
+        target = inventory.Inventory(['localhost'], sections=[
+            inventory.InventoryGroup('test', ['localhost', 'localhost2'])])
 
         source = inventory.simple_inventory(
             'localhost',
@@ -298,10 +298,10 @@ localhost
         self.assertEquals(source.to_string(), target.to_string())
 
     def test_simple_inventory_list_and_dict(self):
-        target = inventory.AnsibleInventory(
+        target = inventory.Inventory(
             ['localhost', 'localhost2'],
             sections=[
-                inventory.AnsibleInventoryGroup(
+                inventory.InventoryGroup(
                     'test',
                     ['localhost', 'localhost2'])])
 

@@ -6,7 +6,7 @@ import tempfile
 import json
 import select
 
-from inventory import AnsibleInventory
+from inventory import Inventory
 
 class Playbook(object):
 
@@ -57,13 +57,13 @@ class Playbook(object):
 
     def run(self):
         try:
-            if isinstance(self.inventory, AnsibleInventory):
+            if isinstance(self.inventory, Inventory):
                 self.inventory.to_file(self.inventory_path)
 
             return self._run()
 
         finally:
-            if isinstance(self.inventory, AnsibleInventory):
+            if isinstance(self.inventory, Inventory):
                 try:
                     os.remove(self.inventory_path)
                 except FileNotFoundError:
@@ -101,7 +101,7 @@ class Playbook(object):
         if self._inventory_path is None:
             if isinstance(self.inventory, basestring):
                 self._inventory_path = self.inventory
-            elif isinstance(self.inventory, AnsibleInventory):
+            elif isinstance(self.inventory, Inventory):
                 _, self._inventory_path  = tempfile.mkstemp()
 
         return self._inventory_path
@@ -150,7 +150,9 @@ class Playbook(object):
     ####
 
     def _tags_as_csv(self, option):
-        yield ",".join(self.tags) if self.tags else None
+        yield ",".join(
+            [self.tags] if isinstance(self.tags, basestring) else self.tags) \
+            if self.tags else None
 
     # option will be one of ({ '-v', '-vv', '-vvv', '-vvvv'})
     # If the option is equal to the objects verbosity level (e.g.
