@@ -19,7 +19,10 @@ class Playbook(object):
 
         self.playbook = playbook
         self.inventory = inventory
-        self.env = env
+        self._env = {}
+        self._env.update(env if env is not None else {})
+
+        self._extra_vars = []
 
         self.tags = []
         self.verbosity = 1
@@ -75,16 +78,17 @@ class Playbook(object):
     def cmd(self):
         cmd = [self.ansible_playbook_bin]
         for option, func in self.options:
-            value = func(self, option)
+            # Func must be a generator so we can support multiple options
+            # (e.g.  ansible-playbook ... -e '{"foo": "bar"}' -e @/path/to/file ...)
+            for value in func(self, option):
+                # If our function returns "" then assume it is an option with no value
+                # (e.g.  -vvvv)
+                if value is "":
+                    cmd.append(option)
 
-            # If our function returns "" then assume it is an option with no value
-            # (e.g.  -vvvv)
-            if value is "":
-                cmd.append(option)
-
-            # otherwise only add option/value if value is not None
-            elif value is not None:
-                cmd.extend( [option, value] )
+                # otherwise only add option/value if value is not None
+                elif value is not None:
+                    cmd.extend( [option, value] )
 
         cmd.append(self.playbook)
 
@@ -102,21 +106,19 @@ class Playbook(object):
         return self._inventory_path
 
 
+    def add_extra_vars(self, extra_vars):
+        if isinstance(extra_vars, basestring) or isinstance(extra_vars, dict):
+            self._extra_vars.append(extra_vars)
+        else:
+            self.logger.warn("Extra_vars must be a file path or "
+                             "dict of values - doing nothing.")
+
     ############
-    ## Option Functions
+    ## Option Generators
     ####
 
-#     def _get_inventory_path(self, option):
-#         if self._inventory_path is None:
-#             if isinstance(self.inventory, basestring):
-#                 self._inventory_path = self.inventory
-#             elif isinstance(self.inventory, AnsibleInventory):
-#                 _, self._inventory_path  = tempfile.mkstemp()
-#
-#         return self._inventory_path
-
     def _tags_as_csv(self, option):
-        return ",".join(self.tags) if self.tags else None
+        yield ",".join(self.tags) if self.tags else None
 
     # option will be one of ({ '-v', '-vv', '-vvv', '-vvvv'})
     # If the option is equal to the objects verbosity level (e.g.
@@ -124,15 +126,24 @@ class Playbook(object):
     # a value).  Otherwise return None indicating that this is not
     # an option to include in cmd.
     def _ansible_log_level(self, option):
-        return "" if option.count("v") == self.verbosity else None
+        yield "" if option.count("v") == self.verbosity else None
 
 
+    def _extra_vars(self, option):
+        for extra_vars in self._extra_vars:
+            if isinstance(extra_vars, basestring):
+                yield "@" + extra_vars
+            elif isinstance(extra_vars, dict):
+                yield json.dumps(extra_vars)
 
+    def _inventory_path(self, option):
+        yield self.inventory_path
 
 # Options defines a mapping between a command line option to ansible-playbook
 # and a function that will produce the correct value for that option
 Playbook.options = [
-    ("-i",  lambda s, o: s.inventory_path),
+    ("-i",  Playbook._inventory_path),
+    ("-e", Playbook._extra_vars),
     ("-t", Playbook._tags_as_csv),
     ("-v", Playbook._ansible_log_level),
     ("-vv", Playbook._ansible_log_level ),

@@ -14,6 +14,12 @@ class PlaybookTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
+    def assertTupleInList(self, tup, lst):
+        # http://locallyoptimal.com/blog/2013/01/20/elegant-n-gram-generation-in-python/
+        # Generate an n-gram for the list (where n is equal to the length of the tuple)
+        # and check to see if the tuple is in the n-gram list
+        self.assertIn(tup, zip(*[lst[i:] for i in range(len(tup))]))
+
     def test_cmd_playbook(self):
         p = playbook.Playbook("some_playbook.yml", "some_inventory")
         self.assertEquals(p.cmd[-1], "some_playbook.yml")
@@ -22,7 +28,7 @@ class PlaybookTestCase(unittest.TestCase):
         p = playbook.Playbook("some_playbook.yml", "some_inventory")
         # We use set(zip(p.cmd, p.cmd[1:])) to generate bigrams of the command
         # This ensures that we can check order of (option, value)
-        self.assertTrue(("-i", "some_inventory") in set(zip(p.cmd, p.cmd[1:])))
+        self.assertTupleInList(("-i", "some_inventory"), p.cmd)
 
     @mock.patch("ansible_coach.playbook.tempfile")
     def test_cmd_AnsibleInventory_inventory(self, tempfile):
@@ -30,7 +36,7 @@ class PlaybookTestCase(unittest.TestCase):
         tempfile.mkstemp.return_value = (None, "/tmp/temp_inventory")
 
         p = playbook.Playbook("some_playbook.yml", playbook.AnsibleInventory(['localhost']))
-        self.assertTrue(("-i", "/tmp/temp_inventory") in set(zip(p.cmd, p.cmd[1:])))
+        self.assertTrue(("-i", "/tmp/temp_inventory"), p.cmd)
 
 
     def test_cmd_default_verbosity(self):
@@ -58,6 +64,27 @@ class PlaybookTestCase(unittest.TestCase):
         p.verbosity = 4
         self.assertTrue("-vvvv" in p.cmd)
 
+    def test_cmd_string_extra_vars(self):
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.add_extra_vars("/path/to/extra_vars.yml")
+        self.assertTupleInList(("-e", "@/path/to/extra_vars.yml"), p.cmd)
+
+    def test_cmd_dict_extra_vars(self):
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.add_extra_vars({
+            "some_variable": "some_value"
+        })
+        self.assertTupleInList(("-e", '{"some_variable": "some_value"}'), p.cmd)
+
+    def test_cmd_multiple_extra_vars(self):
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.add_extra_vars("/path/to/extra_vars.yml")
+        p.add_extra_vars({
+            "some_variable": "some_value"
+        })
+        self.assertTupleInList(("-e", "@/path/to/extra_vars.yml"
+                                "-e", '{"some_variable": "some_value"}'), p.cmd)
+
     @mock.patch("ansible_coach.playbook.tempfile")
     def test_create_AnsibleInventory_tempfile(self, tempfile):
         # Mock out mkstemp's value so we have a known location for the inventory file
@@ -70,14 +97,14 @@ class PlaybookTestCase(unittest.TestCase):
             self.assertTrue(os.path.exists("/tmp/temp_inventory"))
 
         # mock out _call_subprocess on Playbook - we don't want to actually call subprocess
-        with mock.patch.object(playbook.Playbook, '_call_subprocess', autospec=True) as cs:
+        with mock.patch.object(playbook.Playbook, '_run', autospec=True) as _run:
             # Set a return value so we don't actually call the fuction
-            cs.return_value = 0
+            _run.return_value = 0
             # set test_temp_exists as a side effect,  the playbook object will be bound to
             # pb_obj,  and self will refer to the PlaybookTestCase instance from the surrounding
             # closure. This effectively tests that the temp_inventory file exists at the time
             # we call _call_subprocess
-            cs.side_effect = test_temp_exists
+            _run.side_effect = test_temp_exists
 
             p = playbook.Playbook("some_playbook.yml", playbook.AnsibleInventory(['localhost']))
 
