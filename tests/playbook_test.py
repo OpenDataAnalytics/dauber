@@ -6,7 +6,7 @@ import subprocess
 
 sys.path.insert(0, os.path.abspath('..'))
 
-import ansible_coach.playbook as playbook
+import dauber.playbook as playbook
 
 class PlaybookTestCase(unittest.TestCase):
 
@@ -53,7 +53,7 @@ class PlaybookTestCase(unittest.TestCase):
         # This ensures that we can check order of (option, value)
         self.assertTupleInList(("-i", "some_inventory"), p.cmd)
 
-    @mock.patch("ansible_coach.playbook.tempfile")
+    @mock.patch("dauber.playbook.tempfile")
     def test_cmd_Inventory_inventory(self, tempfile):
         # mock out call to tempfile.mkstemp - make sure it returns known path
         tempfile.mkstemp.return_value = (None, "/tmp/temp_inventory")
@@ -190,7 +190,7 @@ class PlaybookTestCase(unittest.TestCase):
     ## Test Inventory temporary file creation
     #####
 
-    @mock.patch("ansible_coach.playbook.tempfile")
+    @mock.patch("dauber.playbook.tempfile")
     def test_create_Inventory_tempfile(self, tempfile):
         # Mock out mkstemp's value so we have a known location for the inventory file
         # TODO: this should be using package_resources to create this file in a local temporary

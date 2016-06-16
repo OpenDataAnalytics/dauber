@@ -1,2 +1,3 @@
-ansible_coach.egg-info
+/dauber.egg-info
 *.pyc
+/dist
