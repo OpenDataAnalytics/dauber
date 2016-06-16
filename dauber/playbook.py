@@ -64,8 +64,8 @@ class Playbook(object):
             for fd in ret[0]:
                 if fd == p.stdout.fileno():
                     self.logger.info(p.stdout.readline())
-                    if fd == p.stderr.fileno():
-                        self.logger.error(p.stderr.readline())
+                if fd == p.stderr.fileno():
+                    self.logger.error(p.stderr.readline())
 
                 if p.poll() is not None:
                     return p.wait()

@@ -20,7 +20,7 @@
 from setuptools import setup
 
 setup(name='dauber',
-      version='0.0.0-0',
+      version='0.0.0-1',
       description='APACHE licensed project for running ansible playbooks',
       long_description="This project is an APACHE liscenced project for managing and running Ansible playbooks",
       author='Kitware Inc',
