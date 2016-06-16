@@ -19,7 +19,8 @@ class Playbook(object):
 
         self.playbook = playbook
         self.inventory = inventory
-        self._env = {}
+
+        self._env = os.environ.copy()
         self._env.update(env if env is not None else {})
 
         self._extra_vars = []
@@ -38,7 +39,7 @@ class Playbook(object):
         self._inventory_path = None
 
     def _run(self):
-        p = subprocess.Popen(self.cmd, env=self.env, stdout=subprocess.PIPE,
+        p = subprocess.Popen(self.cmd, env=self._env, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         while True:
             reads = [p.stdout.fileno(), p.stderr.fileno()]
@@ -112,6 +113,37 @@ class Playbook(object):
         else:
             self.logger.warn("Extra_vars must be a file path or "
                              "dict of values - doing nothing.")
+
+    ############
+    ## Environment Variable config support
+    ####
+
+    def set_host_key_checking(self, to=False):
+        self._env['ANSIBLE_HOST_KEY_CHECKING'] = "1" if to else "0"
+
+    def set_private_key_file(self, to):
+        self._env['ANSIBLE_PRIVATE_KEY_FILE'] = to
+
+    def set_ssh_args(self, to):
+        if isinstance(self, to, basestring):
+            self._env['ANSIBLE_SSH_ARGS'] = to
+        else:
+            self._env['ANSIBLE_SSH_ARGS'] = ' '.join(to)
+
+    def _prepend_path_to_var(self, path, env_var):
+        try:
+            plugin_dirs = self._env[env_var].split(":")
+        except KeyError:
+            plugin_dirs = []
+
+        self._env[env_var] = ":".join([path] + plugin_dirs)
+
+    def add_callback_plugin_dir(self, path):
+        self._prepend_path_to_var(path, "ANSIBLE_CALLBACK_PLUGINS")
+
+    def add_library_dir(self, path):
+        self._prepend_path_to_var(path, "ANSIBLE_LIBRARY")
+
 
     ############
     ## Option Generators

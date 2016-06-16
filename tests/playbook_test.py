@@ -2,6 +2,8 @@ import unittest
 import mock
 import os
 import sys
+import subprocess
+
 sys.path.insert(0, os.path.abspath('..'))
 
 import ansible_coach.playbook as playbook
@@ -14,11 +16,32 @@ class PlaybookTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
+    ###########
+    ## Clustom Assertions
+    #####
+
+    # Generate an n-gram for the list (where n is equal to the length of the tuple)
+    # and check to see if the tuple is in the n-gram list
+    # See: http://locallyoptimal.com/blog/2013/01/20/elegant-n-gram-generation-in-python/
     def assertTupleInList(self, tup, lst):
-        # http://locallyoptimal.com/blog/2013/01/20/elegant-n-gram-generation-in-python/
-        # Generate an n-gram for the list (where n is equal to the length of the tuple)
-        # and check to see if the tuple is in the n-gram list
         self.assertIn(tup, zip(*[lst[i:] for i in range(len(tup))]))
+
+    # This function returns a closure that will call 'env' in a subprocess using
+    # the playbook object's _env attribute.  It then checks to make sure the variable
+    # and the value are in the subprocess' environment.  It is intended to be used as a
+    # side effect in a mocked version of the playbooks _run function.
+    def assertInSubprocessEnvSideEffect(self, var, value):
+        def test_env(pb_obj):
+            p = subprocess.Popen(['env'], env=pb_obj._env, stdout=subprocess.PIPE)
+            out, err = p.communicate()
+
+            self.assertIn("%s=%s" % (var, value), out.split("\n"))
+        return test_env
+
+
+    ############
+    ## Test prduction of playbook command list
+    #####
 
     def test_cmd_playbook(self):
         p = playbook.Playbook("some_playbook.yml", "some_inventory")
@@ -82,8 +105,79 @@ class PlaybookTestCase(unittest.TestCase):
         p.add_extra_vars({
             "some_variable": "some_value"
         })
-        self.assertTupleInList(("-e", "@/path/to/extra_vars.yml"
+        self.assertTupleInList(("-e", "@/path/to/extra_vars.yml",
                                 "-e", '{"some_variable": "some_value"}'), p.cmd)
+
+
+    ############
+    ## Test environment variable configuration
+    #####
+
+    @mock.patch.object(playbook.Playbook, '_run', autospec=True)
+    def test_env_host_key_checking(self, _run):
+        _run.return_value = 0
+        _run.side_effect = self.assertInSubprocessEnvSideEffect('ANSIBLE_HOST_KEY_CHECKING', "0")
+
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.set_host_key_checking(False)
+        p.run()
+
+
+    @mock.patch.object(playbook.Playbook, '_run', autospec=True)
+    def test_env_private_key_file(self, _run):
+        _run.return_value = 0
+        _run.side_effect = self.assertInSubprocessEnvSideEffect('ANSIBLE_PRIVATE_KEY_FILE', "/path/to/file.pem")
+
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.set_private_key_file("/path/to/file.pem")
+        p.run()
+
+
+    @mock.patch.object(playbook.Playbook, '_run', autospec=True)
+    def test_env_calback_plugin_dir(self, _run):
+        _run.return_value = 0
+        _run.side_effect = self.assertInSubprocessEnvSideEffect('ANSIBLE_CALLBACK_PLUGINS', "/path/to/callback_plugin/")
+
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.add_callback_plugin_dir("/path/to/callback_plugin/")
+        p.run()
+
+
+    @mock.patch.object(playbook.Playbook, '_run', autospec=True)
+    def test_env_multiple_calback_plugin_dir(self, _run):
+        _run.return_value = 0
+        _run.side_effect = self.assertInSubprocessEnvSideEffect('ANSIBLE_CALLBACK_PLUGINS', "/path/to/other/callback_plugin/:/path/to/callback_plugin/")
+
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.add_callback_plugin_dir("/path/to/callback_plugin/")
+        p.add_callback_plugin_dir("/path/to/other/callback_plugin/")
+        p.run()
+
+
+    @mock.patch.object(playbook.Playbook, '_run', autospec=True)
+    def test_env_library_dir(self, _run):
+        _run.return_value = 0
+        _run.side_effect = self.assertInSubprocessEnvSideEffect('ANSIBLE_LIBRARY', "/path/to/library_dir/")
+
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.add_library_dir("/path/to/library_dir/")
+        p.run()
+
+
+    @mock.patch.object(playbook.Playbook, '_run', autospec=True)
+    def test_env_multiple_library_dir(self, _run):
+        _run.return_value = 0
+        _run.side_effect = self.assertInSubprocessEnvSideEffect('ANSIBLE_LIBRARY', "/path/to/other/library_dir/:/path/to/library_dir/")
+
+        p = playbook.Playbook("some_playbook.yml", "some_inventory")
+        p.add_library_dir("/path/to/library_dir/")
+        p.add_library_dir("/path/to/other/library_dir/")
+        p.run()
+
+
+    ############
+    ## Test AnsibleInventory temporary file creation
+    #####
 
     @mock.patch("ansible_coach.playbook.tempfile")
     def test_create_AnsibleInventory_tempfile(self, tempfile):
