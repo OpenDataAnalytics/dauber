@@ -20,13 +20,13 @@
 from setuptools import setup
 
 setup(name='dauber',
-      version='0.0.0',
+      version='0.0.0-0',
       description='APACHE licensed project for running ansible playbooks',
-      long_description=open('README.md').read().strip(),
+      long_description="This project is an APACHE liscenced project for managing and running Ansible playbooks",
       author='Kitware Inc',
       author_email='chris.kotfila@kitware.com',
-      url='',
-      py_modules=['dauber'],
+      url='http://www.kitware.com',
+      packages=['dauber'],
       test_suite="tests.test_suite",
       install_requires=[],
       license='Apache 2.0',
