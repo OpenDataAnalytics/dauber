@@ -32,8 +32,14 @@ class Playbook(object):
                  ansible_playbook_bin="ansible-playbook"):
 
         if logger is None:
-            logging.basicConfig()
             self.logger = logging.getLogger(self.__class__.__name__)
+            if not len(self.logger.handlers):
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                ch = logging.StreamHandler()
+                ch.setFormatter(formatter)
+                self.logger.addHandler(ch)
+        else:
+            self.logger = logger
 
         self.playbook = None
         self.inventory = inventory
