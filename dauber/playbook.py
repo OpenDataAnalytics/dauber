@@ -24,27 +24,29 @@ import select
 
 from inventory import Inventory
 
+
 class Playbook(object):
 
-    def __init__(self, playbook, inventory, env=None, logger=None):
+    def __init__(self, inventory=None, env=None, extra_vars=None,
+                 tags=None, verbosity=None, logger=None,
+                 ansible_playbook_bin="ansible-playbook"):
 
         if logger is None:
             logging.basicConfig()
             self.logger = logging.getLogger(self.__class__.__name__)
 
-
-        self.playbook = playbook
+        self.playbook = None
         self.inventory = inventory
 
         self._env = os.environ.copy()
         self._env.update(env if env is not None else {})
 
-        self._extra_vars = []
+        self._extra_vars = [extra_vars] if extra_vars else []
 
-        self.tags = []
-        self.verbosity = 1
+        self.tags = tags if tags is not None else {}
+        self.verbosity = verbosity if verbosity is not None else 1
 
-        self.ansible_playbook_bin = "ansible-playbook"
+        self.ansible_playbook_bin = ansible_playbook_bin
 
         with open(os.devnull, 'w') as fnull:
             if subprocess.call(["which", self.ansible_playbook_bin],
@@ -55,6 +57,7 @@ class Playbook(object):
         self._inventory_path = None
 
     def _run(self):
+        self.logger.debug(self.cmd)
         p = subprocess.Popen(self.cmd, env=self._env, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
         while True:
@@ -63,18 +66,31 @@ class Playbook(object):
 
             for fd in ret[0]:
                 if fd == p.stdout.fileno():
-                    self.logger.info(p.stdout.readline())
+                    msg = p.stdout.readline()
+
+                    # Try to capture ansible FAILED messages
+                    # and log them as errors, this is brittle.
+                    if "FAILED!" in msg:
+                        self.logger.error(msg)
+                    else:
+                        self.logger.info(msg)
+
                 if fd == p.stderr.fileno():
                     self.logger.error(p.stderr.readline())
 
                 if p.poll() is not None:
                     return p.wait()
 
+    def run(self, playbook, inventory=None):
+        self.playbook = playbook
 
-    def run(self):
+        if inventory is not None:
+            self.inventory = inventory
+
         try:
             if isinstance(self.inventory, Inventory):
                 self.inventory.to_file(self.inventory_path)
+                self.logger.debug("Saved inventory file to %s" % self.inventory_path)
 
             return self._run()
 
@@ -82,14 +98,14 @@ class Playbook(object):
             if isinstance(self.inventory, Inventory):
                 try:
                     os.remove(self.inventory_path)
-                except FileNotFoundError:
+                    self.logger.debug("Cleaned up %s" % self.inventory_path)
+                except IOError:
                     pass
 
                 self._inventory_path = None
 
-
-    def __call__(self):
-        return self.run()
+    def __call__(self, playbook, **kwargs):
+        return self.run(playbook, **kwargs)
 
     @property
     def cmd(self):
@@ -107,10 +123,10 @@ class Playbook(object):
                 elif value is not None:
                     cmd.extend( [option, value] )
 
-        cmd.append(self.playbook)
+        if self.playbook is not None:
+            cmd.append(self.playbook)
 
         return cmd
-
 
     @property
     def inventory_path(self):
@@ -121,7 +137,6 @@ class Playbook(object):
                 _, self._inventory_path  = tempfile.mkstemp()
 
         return self._inventory_path
-
 
     def add_extra_vars(self, extra_vars):
         if isinstance(extra_vars, basestring) or isinstance(extra_vars, dict):
@@ -196,7 +211,7 @@ Playbook.options = [
     ("-e", Playbook._extra_vars),
     ("-t", Playbook._tags_as_csv),
     ("-v", Playbook._ansible_log_level),
-    ("-vv", Playbook._ansible_log_level ),
+    ("-vv", Playbook._ansible_log_level),
     ("-vvv", Playbook._ansible_log_level),
     ("-vvvv", Playbook._ansible_log_level)
 ]
