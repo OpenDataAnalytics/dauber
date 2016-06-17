@@ -72,7 +72,7 @@ class Playbook(object):
 
             for fd in ret[0]:
                 if fd == p.stdout.fileno():
-                    msg = p.stdout.readline()
+                    msg = p.stdout.readline().strip()
 
                     # Try to capture ansible FAILED messages
                     # and log them as errors, this is brittle.
@@ -82,7 +82,7 @@ class Playbook(object):
                         self.logger.info(msg)
 
                 if fd == p.stderr.fileno():
-                    self.logger.error(p.stderr.readline())
+                    self.logger.error(p.stderr.readline().strip())
 
                 if p.poll() is not None:
                     return p.wait()
