@@ -49,7 +49,7 @@ class Playbook(object):
 
         self._extra_vars = [extra_vars] if extra_vars else []
 
-        self.tags = tags if tags is not None else {}
+        self.tags = tags if tags is not None else []
         self.verbosity = verbosity if verbosity is not None else 1
 
         self.ansible_playbook_bin = ansible_playbook_bin
