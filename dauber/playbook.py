@@ -27,9 +27,11 @@ from inventory import Inventory
 
 class Playbook(object):
 
-    def __init__(self, inventory=None, env=None, extra_vars=None,
+    def __init__(self, playbook, inventory=None, env=None, extra_vars=None,
                  tags=None, verbosity=None, logger=None,
                  ansible_playbook_bin="ansible-playbook"):
+
+        self.playbook = playbook
 
         if logger is None:
             self.logger = logging.getLogger(self.__class__.__name__)
@@ -41,7 +43,6 @@ class Playbook(object):
         else:
             self.logger = logger
 
-        self.playbook = None
         self.inventory = inventory
 
         self._env = os.environ.copy()
@@ -87,8 +88,7 @@ class Playbook(object):
                 if p.poll() is not None:
                     return p.wait()
 
-    def run(self, playbook, inventory=None):
-        self.playbook = playbook
+    def run(self, inventory=None):
 
         if inventory is not None:
             self.inventory = inventory
