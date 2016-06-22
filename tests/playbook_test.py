@@ -38,6 +38,38 @@ class PlaybookTestCase(unittest.TestCase):
             self.assertIn("%s=%s" % (var, value), out.split("\n"))
         return test_env
 
+    def get_playbook_path(self, f):
+        return os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            "playbooks", f)
+
+    def test_playbook_inventory_constructor_argument(self):
+        p = playbook.Playbook(self.get_playbook_path("successful.yml"),
+                              playbook.Inventory("localhost"))
+        code = p.run()
+        self.assertEquals(code, 0)
+
+    def test_playbook_inventory_run_argument(self):
+        p = playbook.Playbook(self.get_playbook_path("successful.yml"),
+                              playbook.Inventory("foo"))
+        code = p.run(playbook.Inventory("localhost"))
+        self.assertEquals(code, 0)
+
+
+    def test_playbook_logs_failure(self):
+        p = playbook.Playbook(self.get_playbook_path("missing_variable.yml"))
+        p.logger.error = mock.MagicMock(return_value=None)
+
+        p.run(playbook.Inventory("localhost"))
+
+        self.assertTrue(p.logger.error.called)
+
+    def test_playbook_failure_code(self):
+        p = playbook.Playbook(self.get_playbook_path("missing_variable.yml"))
+        p.logger = mock.MagicMock(return_value=None)
+        code = p.run(playbook.Inventory("localhost"))
+        self.assertNotEquals(code, 0)
+
 
     ############
     ## Test prduction of playbook command list
