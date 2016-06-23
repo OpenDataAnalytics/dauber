@@ -1,25 +1,13 @@
-# (C) 2012, Michael DeHaan, <michael.dehaan@gmail.com>
-
-# This file is part of Ansible
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
-
-# Make coding more python3-ish
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.plugins.callback import CallbackBase
+import ansible
+from ansible.executor.task_result import TaskResult
+from ansible.executor.stats import AggregateStats
+from ansible.playbook import Playbook, Play
+from ansible.playbook.task import Task
+from ansible.playbook.block import Block
+
 import zmq
 import random
 import sys
@@ -28,27 +16,68 @@ import json
 import uuid
 import os
 
-class UUIDSafeEncoder(json.JSONEncoder):
+
+HOOK_NAMES = [
+    'v2_runner_on_failed',
+    'v2_runner_on_ok',
+    'v2_runner_on_skipped',
+    'v2_runner_on_unreachable',
+    'v2_playbook_on_no_hosts_matched',
+    'v2_playbook_on_no_hosts_remaining',
+    'v2_playbook_on_task_start',
+    'v2_playbook_on_cleanup_task_start',
+    'v2_playbook_on_handler_task_start',
+    'v2_playbook_on_play_start',
+    'v2_on_any',
+    'v2_on_file_diff',
+    'v2_runner_item_on_ok',
+    'v2_runner_item_on_failed',
+    'v2_runner_item_on_skipped',
+    'v2_playbook_on_include',
+    'v2_playbook_on_stats',
+    'v2_playbook_on_start',
+    'v2_runner_retry'
+]
+
+def pluck(fields):
+    def _serialize(self, obj):
+        return {k: getattr(k, obj) for k in fields if hasattr(k, obj)}
+
+    return _serialize
+
+
+
+class CustomEncoder(json.JSONEncoder):
+    class_map = {
+        uuid.UUID: str,
+        Playbook: pluck(['_file_name', '_basedir', '_entries']),
+        Task: Task.serialize,
+        Play: Play.serialize,
+        Block: Block.serialize,
+        TaskResult: lambda tr: tr._result,
+        AggregateStats: AggregateStats.__repr__
+    }
+
     def default(self, obj):
-        if isinstance(obj, uuid.UUID):
-            return str(obj)
-            # Let the base class default method raise the TypeError
+        for cls, func in self.class_map.items():
+            if isinstance(obj, cls):
+                return func(obj)
+
         return json.JSONEncoder.default(self, obj)
 
 
-class CallbackModule(CallbackBase):
+class CallbackModule(ansible.plugins.callback.CallbackBase):
     """
-    This is a very trivial example of how any callback function can get at play and task objects.
-    play will be 'None' for runner invocations, and task will be None for 'setup' invocations.
+    This is a callback designed to create a local IPC based zmq socket
+    for publishing ansible events and data to be consumed by other objects
+    such as dauber's ZMQPlaybook object.
     """
     CALLBACK_VERSION = 2.0
-#    CALLBACK_TYPE = 'aggregate'
-#    CALLBACK_NAME = 'context_demo'
-#    CALLBACK_NEEDS_WHITELIST = True
+    CALLBACK_TYPE = 'notification'
+    CALLBACK_NAME = 'zmq'
+
 
     def __init__(self, *args, **kwargs):
-        self.task = None
-        self.play = None
 
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
@@ -56,63 +85,76 @@ class CallbackModule(CallbackBase):
         try:
             self.socket.bind(os.environ['DAUBER_SOCKET_URI'])
         except KeyError:
+            # What do now?
             pass
 
-    def v2_runner_on_failed(self, result, ignore_errors):
-        pass
-
-    def v2_runner_on_ok(self, result):
-        pass
-
-    def v2_runner_on_skipped(self, result):
-        pass
-
-    def v2_runner_on_unreachable(self, result):
-        pass
-
-    def v2_playbook_on_no_hosts_matched(self):
-        pass
-
-    def v2_playbook_on_no_hosts_remaining(self):
-        pass
-
-    def v2_playbook_on_task_start(self, task, is_conditional):
-        self.task = task
-        msg = "%s %s" % ('on_task_start', json.dumps(self.task.serialize(), cls=UUIDSafeEncoder))
+    def publish(self, topic, obj):
+        msg = "%s %s" % (topic, json.dumps(obj, cls=CustomEncoder))
         self.socket.send(msg)
 
-    def v2_playbook_on_cleanup_task_start(self, task):
-        pass
+# Proxy through all hooks to publish
+def add_hook(hook):
+    def _hook(self, *args, **kwargs):
+        self.publish(hook, {'args': args, 'kwargs': kwargs})
+    return _hook
 
-    def v2_playbook_on_handler_task_start(self, task):
-        pass
+for hook in HOOK_NAMES:
+    setattr(CallbackModule, hook, add_hook(hook))
 
-    def v2_playbook_on_play_start(self, play):
-        pass
 
-    def v2_on_any(self, *args, **kwargs):
-        pass
-
-    def v2_on_file_diff(self, result):
-        pass
-
-    def v2_runner_item_on_ok(self, result):
-        pass
-
-    def v2_runner_item_on_failed(self, result):
-        pass
-
-    def v2_runner_item_on_skipped(self, result):
-        pass
-
-    def v2_playbook_on_include(self, included_file):
-        pass
-
-    def v2_playbook_on_stats(self, stats):
-        pass
-
-    def v2_playbook_on_start(self, playbook):
-        pass
-
-    def v2_runner_retry(self, result):
-        pass
+#     def v2_runner_on_failed(self, result, ignore_errors):
+#         pass
+#
+#     def v2_runner_on_ok(self, result):
+#         pass
+#
+#     def v2_runner_on_skipped(self, result):
+#         pass
+#
+#     def v2_runner_on_unreachable(self, result):
+#         pass
+#
+#     def v2_playbook_on_no_hosts_matched(self):
+#         pass
+#
+#     def v2_playbook_on_no_hosts_remaining(self):
+#         pass
+#
+#     def v2_playbook_on_task_start(self, task, is_conditional):
+#         pass
+#
+#     def v2_playbook_on_cleanup_task_start(self, task):
+#         pass
+#
+#     def v2_playbook_on_handler_task_start(self, task):
+#         pass
+#
+#     def v2_playbook_on_play_start(self, play):
+#         pass
+#
+#     def v2_on_any(self, *args, **kwargs):
+#         pass
+#
+#     def v2_on_file_diff(self, result):
+#         pass
+#
+#     def v2_runner_item_on_ok(self, result):
+#         pass
+#
+#     def v2_runner_item_on_failed(self, result):
+#         pass
+#
+#     def v2_runner_item_on_skipped(self, result):
+#         pass
+#
+#     def v2_playbook_on_include(self, included_file):
+#         pass
+#
+#     def v2_playbook_on_stats(self, stats):
+#         pass
+#
+#     def v2_playbook_on_start(self, playbook):
+#         pass
+#
+#     def v2_runner_retry(self, result):
+#         pass
