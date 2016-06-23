@@ -101,14 +101,18 @@ class Playbook(object):
             return self._run()
 
         finally:
-            if isinstance(self.inventory, Inventory):
-                try:
-                    os.remove(self.inventory_path)
-                    self.logger.debug("Cleaned up %s" % self.inventory_path)
-                except IOError:
-                    pass
+            self.cleanup()
 
-                self._inventory_path = None
+    def cleanup(self):
+        if isinstance(self.inventory, Inventory):
+            try:
+                os.remove(self.inventory_path)
+                self.logger.debug("Cleaned up %s" % self.inventory_path)
+            except IOError:
+                pass
+
+            self._inventory_path = None
+
 
     def __call__(self, playbook, **kwargs):
         return self.run(playbook, **kwargs)
