@@ -8,7 +8,8 @@ import subprocess
 import logging
 import tempfile
 import shutil
-
+import pkg_resources as pr
+import sys
 
 class ZMQPlaybook(Playbook):
 
@@ -27,8 +28,7 @@ class ZMQPlaybook(Playbook):
         self.poller.register(self.socket, zmq.POLLIN)
 
         self.add_callback_plugin_dir(
-            os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                         "callback_plugins"))
+            pr.resource_filename(__name__, 'ansible/callback_plugins'))
 
         self.logger.setLevel(logging.INFO)
         self.verbosity = 3

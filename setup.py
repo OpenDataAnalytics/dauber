@@ -27,8 +27,11 @@ setup(name='dauber',
       author_email='chris.kotfila@kitware.com',
       url='http://www.kitware.com',
       packages=['dauber'],
+      package_data={'dauber': ['ansible/callback_plugins/*.py']},
       test_suite="tests.test_suite",
       install_requires=[],
       license='Apache 2.0',
       zip_safe=False,
-      keywords='ansible')
+      keywords='ansible',
+
+)
