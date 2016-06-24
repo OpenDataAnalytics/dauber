@@ -1,0 +1,9 @@
+- include: "zmq_runner_on_ok.yml"
+
+- hosts: localhost
+  connection: local
+  vars:
+    ansible_python_interpreter: python2
+  tasks:
+    - debug: msg="Should trigger on_task_start"
+    - debug: msg="Should trigger on_task_start"

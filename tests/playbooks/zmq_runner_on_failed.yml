@@ -1,0 +1,6 @@
+- hosts: localhost
+  connection: local
+  vars:
+    ansible_python_interpreter: python2
+  tasks:
+    - debug: msg="This {{ task }} should fail."

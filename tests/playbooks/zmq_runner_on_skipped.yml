@@ -1,0 +1,7 @@
+- hosts: localhost
+  connection: local
+  vars:
+    ansible_python_interpreter: python2
+  tasks:
+    - debug: msg="Should trigger on_skipped"
+      when: false

@@ -15,7 +15,7 @@ import time
 import json
 import uuid
 import os
-
+import time
 
 HOOK_NAMES = [
     'v2_runner_on_failed',
@@ -36,15 +36,14 @@ HOOK_NAMES = [
     'v2_playbook_on_include',
     'v2_playbook_on_stats',
     'v2_playbook_on_start',
-    'v2_runner_retry'
+    'v2_runner_retry',
 ]
 
 def pluck(fields):
-    def _serialize(self, obj):
-        return {k: getattr(k, obj) for k in fields if hasattr(k, obj)}
+    def _serialize(obj):
+        return {k: getattr(obj, k) for k in fields if hasattr(obj, k)}
 
     return _serialize
-
 
 
 class CustomEncoder(json.JSONEncoder):
@@ -54,8 +53,8 @@ class CustomEncoder(json.JSONEncoder):
         Task: Task.serialize,
         Play: Play.serialize,
         Block: Block.serialize,
-        TaskResult: lambda tr: tr._result,
-        AggregateStats: AggregateStats.__repr__
+        TaskResult: pluck(['_result', '_task']),
+        AggregateStats: pluck(['ok', 'changed', 'failures', 'skipped', 'processed'])
     }
 
     def default(self, obj):
@@ -76,85 +75,36 @@ class CallbackModule(ansible.plugins.callback.CallbackBase):
     CALLBACK_TYPE = 'notification'
     CALLBACK_NAME = 'zmq'
 
+#     def v2_playbook_on_include(self, *args, **kwargs):
+#         from pudb.remote import set_trace; set_trace(term_size=(319, 89))
+#
+#     def v2_playbook_on_start(self, playbook):
+# #        from pudb.remote import set_trace; set_trace(term_size=(319, 89))
+#         msg = "%s" % json.dumps({'args': playbook, 'kwargs': {}}, cls=CustomEncoder)
+#         self.socket.send_multipart(['v2_playbook_on_start', msg])
 
     def __init__(self, *args, **kwargs):
-
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
-
         try:
             self.socket.bind(os.environ['DAUBER_SOCKET_URI'])
+            # Slow joiner problem
+            time.sleep(0.2)
         except KeyError:
             # What do now?
             pass
 
-    def publish(self, topic, obj):
-        msg = "%s %s" % (topic, json.dumps(obj, cls=CustomEncoder))
-        self.socket.send(msg)
+    def publish(self, topic, *args, **kwargs):
+        self.socket.send_multipart(
+            [topic, json.dumps(args, cls=CustomEncoder),
+             json.dumps(kwargs, cls=CustomEncoder)])
+
 
 # Proxy through all hooks to publish
 def add_hook(hook):
     def _hook(self, *args, **kwargs):
-        self.publish(hook, {'args': args, 'kwargs': kwargs})
+        self.publish(hook, *args, **kwargs)
     return _hook
 
 for hook in HOOK_NAMES:
     setattr(CallbackModule, hook, add_hook(hook))
-
-
-#     def v2_runner_on_failed(self, result, ignore_errors):
-#         pass
-#
-#     def v2_runner_on_ok(self, result):
-#         pass
-#
-#     def v2_runner_on_skipped(self, result):
-#         pass
-#
-#     def v2_runner_on_unreachable(self, result):
-#         pass
-#
-#     def v2_playbook_on_no_hosts_matched(self):
-#         pass
-#
-#     def v2_playbook_on_no_hosts_remaining(self):
-#         pass
-#
-#     def v2_playbook_on_task_start(self, task, is_conditional):
-#         pass
-#
-#     def v2_playbook_on_cleanup_task_start(self, task):
-#         pass
-#
-#     def v2_playbook_on_handler_task_start(self, task):
-#         pass
-#
-#     def v2_playbook_on_play_start(self, play):
-#         pass
-#
-#     def v2_on_any(self, *args, **kwargs):
-#         pass
-#
-#     def v2_on_file_diff(self, result):
-#         pass
-#
-#     def v2_runner_item_on_ok(self, result):
-#         pass
-#
-#     def v2_runner_item_on_failed(self, result):
-#         pass
-#
-#     def v2_runner_item_on_skipped(self, result):
-#         pass
-#
-#     def v2_playbook_on_include(self, included_file):
-#         pass
-#
-#     def v2_playbook_on_stats(self, stats):
-#         pass
-#
-#     def v2_playbook_on_start(self, playbook):
-#         pass
-#
-#     def v2_runner_retry(self, result):
-#         pass
