@@ -75,9 +75,9 @@ class CallbackModule(ansible.plugins.callback.CallbackBase):
     CALLBACK_TYPE = 'notification'
     CALLBACK_NAME = 'zmq'
 
-    def v2_playbook_on_include(self, included_file):
-         from pudb.remote import set_trace; set_trace(term_size=(319, 89))
-         self.publish('v2_playbook_on_include', included_file)
+#    def v2_playbook_on_include(self, included_file):
+#         from pudb.remote import set_trace; set_trace(term_size=(319, 89))
+#         self.publish('v2_playbook_on_include', included_file)
 
     # This has to be defined outside of the automatic hook generation because
     # of the ansible magic here:
@@ -85,16 +85,51 @@ class CallbackModule(ansible.plugins.callback.CallbackBase):
     def v2_playbook_on_start(self, playbook):
         self.publish('v2_playbook_on_start', playbook)
 
+
+    # See: http://zguide.zeromq.org/page:all#toc47
+    def _wait_for_goahead(self):
+        control_socket = self.context.socket(zmq.REP)
+        control_socket.bind(os.environ['DAUBER_CONTROL_SOCKET_URI'])
+
+        poller = zmq.Poller()
+        poller.register(control_socket)
+
+        timeout = 500
+        t_last = time.time()
+        while (time.time() - t_last) < timeout:
+            ready = dict(poller.poll(10))
+            if ready.get(control_socket):
+                control_socket.recv()
+
+                control_socket.send(b'')
+
+                break
+
+            self.socket.send_multipart(['hello', b''])
+            t_last = time.time()
+
+        assert (time.time() - t_last) < timeout, \
+            "Timed out before recieving a signal to continue"
+
+        del control_socket
+
+
     def __init__(self, *args, **kwargs):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PUB)
         try:
             self.socket.bind(os.environ['DAUBER_SOCKET_URI'])
+
             # Slow joiner problem
-            time.sleep(0.2)
+            # time.sleep(0.2)
         except KeyError:
             # What do now?
             pass
+
+        # Make sure we've got the go-ahead from the subscriber before
+        # we start publishing data (solves late joiner problem more
+        # robustly than by just 'sleeping'
+        self._wait_for_goahead()
 
     def publish(self, topic, *args, **kwargs):
         self.socket.send_multipart(

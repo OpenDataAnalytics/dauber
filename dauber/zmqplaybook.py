@@ -7,6 +7,7 @@ import logging
 import tempfile
 import shutil
 import pkg_resources as pr
+import time
 
 ANSIBLE_HOOK_TOPICS = [
     'v2_runner_on_failed',                # def v2_runner_on_failed(result, ignore_errors):
@@ -44,6 +45,8 @@ class ZMQPlaybook(Playbook):
         self._env['DAUBER_SOCKET_URI'] = "ipc://{}/dauber.socket".format(self.socket_dir)
         self.socket.connect(self._env['DAUBER_SOCKET_URI'])
 
+        self._env['DAUBER_CONTROL_SOCKET_URI'] = "ipc://{}/control.socket".format(self.socket_dir)
+
         self.poller = zmq.Poller()
         self._register_socket(self.socket, self.__class__._zmq_socket_handler)
 
@@ -64,14 +67,13 @@ class ZMQPlaybook(Playbook):
 
         self._hooks[hook].append(callback)
 
+    # This is a "private" API for registering sockets on the the polling loop
     def _register_socket(self, socket, callback, opt=zmq.POLLIN):
         self.poller.register(socket, opt)
         self._sockets.append((socket, callback, opt))
 
     def _zmq_socket_handler(self, socket):
         topic, args, kwargs = socket.recv_multipart()
-        if topic == 'zmq_playbook_include':
-            import pudb; pu.db
 
         self.logger.debug("Recieved notification on topic: {}".format(topic))
         args = json.loads(args)
@@ -86,16 +88,49 @@ class ZMQPlaybook(Playbook):
 
 
     def _ansible_stdout_handler(self, stdout):
-        self.logger.info(stdout.readline().strip())
+        #        self.logger.info(stdout.readline().strip())
+        pass
 
     def _ansible_stderr_handler(self, stderr):
         self.logger.error(stderr.readline().strip())
+
+    # see: http://zguide.zeromq.org/page:all#toc47
+    def _connect(self):
+        # Subscribe to the hello topic - once we recieve a hello we'll send a request
+        # for real data.  The callback plugin will effectively block execution until we
+        # Send this request
+        self.socket.setsockopt(zmq.SUBSCRIBE, 'hello')
+
+        # Define the control socket for responding to the 'hello' topic
+        control_socket = self.context.socket(zmq.REQ)
+        control_socket.connect(self._env['DAUBER_CONTROL_SOCKET_URI'])
+        timeout = 500
+        t_last = time.time()
+        while (time.time() - t_last) < timeout:
+            ready = dict(self.poller.poll())
+            if ready.get(self.socket):
+                topic, _ = self.socket.recv_multipart()
+                if topic == 'hello':
+                    # Signal that we've connected and we're ready to recieve data
+                    control_socket.send(b'')
+                    control_socket.recv()
+                    break
+
+        assert (time.time() - t_last) < timeout, \
+            "Timed out before recieving a hello topic message from the publisher."
+
+        del control_socket
+        self.socket.setsockopt(zmq.UNSUBSCRIBE, 'hello')
+
 
 
     def _run(self):
         self.logger.debug(self.cmd)
         p = subprocess.Popen(self.cmd, env=self._env, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE)
+
+        # This function negotiates the late joiner problem
+        self._connect()
 
         self._register_socket(p.stdout, self.__class__._ansible_stdout_handler)
         self._register_socket(p.stderr, self.__class__._ansible_stderr_handler)
