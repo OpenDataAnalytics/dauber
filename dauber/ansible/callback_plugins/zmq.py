@@ -35,7 +35,7 @@ HOOK_NAMES = [
     'v2_runner_item_on_skipped',
     'v2_playbook_on_include',
     'v2_playbook_on_stats',
-    'v2_playbook_on_start',
+#    'v2_playbook_on_start', # See note on function
     'v2_runner_retry',
 ]
 
@@ -75,13 +75,15 @@ class CallbackModule(ansible.plugins.callback.CallbackBase):
     CALLBACK_TYPE = 'notification'
     CALLBACK_NAME = 'zmq'
 
-#     def v2_playbook_on_include(self, *args, **kwargs):
-#         from pudb.remote import set_trace; set_trace(term_size=(319, 89))
-#
-#     def v2_playbook_on_start(self, playbook):
-# #        from pudb.remote import set_trace; set_trace(term_size=(319, 89))
-#         msg = "%s" % json.dumps({'args': playbook, 'kwargs': {}}, cls=CustomEncoder)
-#         self.socket.send_multipart(['v2_playbook_on_start', msg])
+    def v2_playbook_on_include(self, included_file):
+         from pudb.remote import set_trace; set_trace(term_size=(319, 89))
+         self.publish('v2_playbook_on_include', included_file)
+
+    # This has to be defined outside of the automatic hook generation because
+    # of the ansible magic here:
+    # https://github.com/ansible/ansible/blob/devel/lib/ansible/executor/task_queue_manager.py#L340-L352
+    def v2_playbook_on_start(self, playbook):
+        self.publish('v2_playbook_on_start', playbook)
 
     def __init__(self, *args, **kwargs):
         self.context = zmq.Context()

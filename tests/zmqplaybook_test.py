@@ -100,6 +100,8 @@ class ZMQPlaybookTestCase(unittest.TestCase):
         p = playbook.ZMQPlaybook(self.get_playbook_path("zmq_runner_on_ok.yml"))
         def test_playbook(playbook):
             self.assertIn('_entries', playbook)
+            self.assertIn('_basedir', playbook)
+            self.assertIn('_file_name', playbook)
 
         p.add_hook('v2_playbook_on_start', test_playbook)
         p.run(Inventory(["localhost"]))
@@ -119,32 +121,36 @@ class ZMQPlaybookTestCase(unittest.TestCase):
         p.run(Inventory(["localhost"]))
 
 
-
-    def test_v2_playbook_on_include_called(self):
-        p = playbook.ZMQPlaybook(self.get_playbook_path("zmq_playbook_on_include.yml"))
+    def test_v2_playbook_on_stats_called(self):
+        p = playbook.ZMQPlaybook(self.get_playbook_path("zmq_runner_on_ok.yml"))
         m = mock.Mock()
-        p.add_hook('v2_playbook_on_include', m)
+        p.add_hook('v2_playbook_on_stats', m)
         p.run(Inventory(["localhost"]))
         self.assertTrue(m.called)
 
 
-    @unittest.skip('to implement')
-    def test_v2_playbook_on_include(self):
-        pass
-
-
-    @unittest.skip('to implement')
-    def test_v2_playbook_on_stats_called(self):
-        pass
-
-    @unittest.skip('to implement')
     def test_v2_playbook_on_stats(self):
-        pass
+        p = playbook.ZMQPlaybook(self.get_playbook_path("zmq_runner_on_ok.yml"))
+        def test_stats(stats):
+            self.assertIn('failures', stats)
+            self.assertIn('skipped', stats)
+            self.assertIn('ok', stats)
+            self.assertIn('processed', stats)
+            self.assertIn('changed', stats)
+
+        p.add_hook('v2_playbook_on_stats', test_stats)
+        p.run(Inventory(["localhost"]))
 
 
 
 
 
+#     def test_v2_playbook_on_include_called(self):
+#         pass
+#
+#     def test_v2_playbook_on_include(self):
+#         pass
+#
 #     def test_v2_runner_on_unreachable_called(self):
 #         pass
 #

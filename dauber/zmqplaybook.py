@@ -70,6 +70,8 @@ class ZMQPlaybook(Playbook):
 
     def _zmq_socket_handler(self, socket):
         topic, args, kwargs = socket.recv_multipart()
+        if topic == 'zmq_playbook_include':
+            import pudb; pu.db
 
         self.logger.debug("Recieved notification on topic: {}".format(topic))
         args = json.loads(args)
